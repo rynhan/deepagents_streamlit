@@ -19,7 +19,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - opensandbox-server
+      opensandbox-server:
+        condition: service_started
+      pptx-sandbox-image:
+        condition: service_completed_successfully
     expose:
       - "8501"
 
@@ -39,6 +42,17 @@ services:
       - opensandbox-data:/var/lib/opensandbox
     expose:
       - "8090"
+
+  # Build and load the sandbox image into the same Docker daemon used by
+  # OpenSandbox through /var/run/docker.sock. This one-shot container exits
+  # immediately; its image remains available for sandbox creation.
+  pptx-sandbox-image:
+    image: ${PPTX_SANDBOX_IMAGE:-pptx-sandbox:1}
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "-c", "true"]
+    restart: "no"
 
 volumes:
   opensandbox-data:

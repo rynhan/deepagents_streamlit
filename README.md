@@ -31,12 +31,11 @@ If Coolify cannot resolve Compose service names from app containers, put both se
 same Coolify network and set `OPEN_SANDBOX_DOMAIN` to the OpenSandbox service's internal DNS
 name and port. The app defaults to the Compose service address `opensandbox-server:8090`.
 
-Build the separate PPTX sandbox image on the Docker host used by OpenSandbox and make the image
-available to that host's Docker daemon under the name `pptx-sandbox:1`. The `sandbox/` directory
-is the build context for this image and is intentionally separate from the Streamlit and
-OpenSandbox server images. For multiple hosts, push it to a private registry and configure
-`PPTX_SANDBOX_IMAGE` to that registry image. OpenSandbox also needs to pull its configured
-`opensandbox/execd:v1.1.0` runtime image.
+Compose builds the PPTX sandbox image from `sandbox/Dockerfile` and tags it `pptx-sandbox:1`
+by default. A one-shot Compose service ensures the image is built in the same Docker daemon
+used by OpenSandbox through the host Docker socket, then exits; OpenSandbox can use that image
+when it creates a sandbox. To override the image name, set `PPTX_SANDBOX_IMAGE` in Coolify.
+OpenSandbox also needs to pull its configured `opensandbox/execd:v1.1.0` runtime image.
 
 The deployment server config is `sandbox/os-sandbox.toml`. It is copied into the custom
 OpenSandbox server image, so Compose does not depend on a config-file bind mount from Coolify's
