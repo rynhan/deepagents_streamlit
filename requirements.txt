@@ -1,0 +1,7 @@
+streamlit
+python-dotenv>=1.2.1
+deepagents>=0.7.30
+langchain-openai>=1.1.10
+langchain-sandbox-opensandbox>=0.1.2
+opensandbox>=0.1.15
+langfuse>=4.6.1
