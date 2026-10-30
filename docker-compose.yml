@@ -24,17 +24,18 @@ services:
       - "8501"
 
   opensandbox-server:
-    image: opensandbox/server:release-1.1.0
+    image: local/opensandbox-server:release-1.1.0
+    build:
+      context: .
+      dockerfile: sandbox/OpenSandbox.Dockerfile
     restart: unless-stopped
     environment:
       OPENSANDBOX_SERVER_API_KEY: ${OPEN_SANDBOX_API_KEY:?Set OPEN_SANDBOX_API_KEY in Coolify}
       OPENSANDBOX_DISABLE_METRICS: "1"
-      SANDBOX_CONFIG_PATH: /etc/opensandbox/config.toml
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./sandbox/coolify.os-sandbox.toml:/etc/opensandbox/config.toml:ro
       - opensandbox-data:/var/lib/opensandbox
     expose:
       - "8090"

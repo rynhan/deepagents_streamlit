@@ -4,6 +4,10 @@
 .vscode
 .idea
 
+# Large sandbox skill assets are not needed by either application image build.
+# The separate PPTX sandbox image is built with sandbox/ as its own context.
+sandbox/skills/
+
 # Python caches / virtual environments
 __pycache__
 **/__pycache__

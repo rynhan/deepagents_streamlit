@@ -15,25 +15,32 @@ OpenSandbox server port publicly.
 
 Expose the `streamlit` service on port `8501` through Coolify's proxy and enable HTTPS. The
 OpenSandbox service uses the host Docker socket and creates sibling sandbox containers; this is
-high privilege. Deploy only on a host dedicated to this application. The configured bridge
-network publishes sandbox ports in `40000-60000`, so allow that range as required by the
-OpenSandbox runtime and firewall design. Keep the SQLite state in the `opensandbox-data` volume.
+high privilege. Deploy only on a host dedicated to this application. Its server image is built
+from `sandbox/OpenSandbox.Dockerfile`, which copies `sandbox/os-sandbox.toml` into the image;
+there is no host-side config-file bind mount. The configured bridge network publishes sandbox
+ports in `40000-60000`, so allow that range as required by the OpenSandbox runtime and firewall
+design. Keep the SQLite state in the `opensandbox-data` volume.
+
+`OPEN_SANDBOX_API_KEY` is a secret you generate and set in Coolify; it is shared by the app and
+server and is not issued by OpenSandbox. The server config restricts host-path mounts to
+`/opt/opensandbox/allowed-host-mounts`; the app does not currently request host mounts. The
+allowlisted path is on the Docker host, so create it there only if you enable host mounts, keep
+it empty of sensitive data, and review the allowlist before enabling that feature.
 
 If Coolify cannot resolve Compose service names from app containers, put both services on the
 same Coolify network and set `OPEN_SANDBOX_DOMAIN` to the OpenSandbox service's internal DNS
 name and port. The app defaults to the Compose service address `opensandbox-server:8090`.
 
 Build the separate PPTX sandbox image on the Docker host used by OpenSandbox and make the image
-available to that host's Docker daemon under the name `pptx-sandbox:1`. The existing sandbox
-Dockerfile is the build context `streamlit_app/sandbox`; it is intentionally separate from the
-Streamlit UI image. For a single host, build/pull it on that same host. For multiple hosts, push
-it to a private registry and configure `PPTX_SANDBOX_IMAGE` to that registry image. OpenSandbox
-also needs to pull its configured `opensandbox/execd:v1.1.0` runtime image.
+available to that host's Docker daemon under the name `pptx-sandbox:1`. The `sandbox/` directory
+is the build context for this image and is intentionally separate from the Streamlit and
+OpenSandbox server images. For multiple hosts, push it to a private registry and configure
+`PPTX_SANDBOX_IMAGE` to that registry image. OpenSandbox also needs to pull its configured
+`opensandbox/execd:v1.1.0` runtime image.
 
-The Compose server config is in `sandbox/coolify.os-sandbox.toml`. It uses the host-gateway
-routing pattern for sandboxes created from a server container. If Docker networking on your
-Coolify host differs, verify sandbox creation and agent file operations before opening the app
-publicly.
+The deployment server config is `sandbox/os-sandbox.toml`. It is copied into the custom
+OpenSandbox server image, so Compose does not depend on a config-file bind mount from Coolify's
+host checkout. Verify sandbox creation and agent file operations before opening the app publicly.
 
 ## Local setup
 
@@ -49,7 +56,7 @@ publicly.
    `OPENAI_API_KEY` in `.env.local` (or in the process environment). `OPENAI_BASE_URL` and
    `OPENAI_MODEL` can override the notebook defaults. Langfuse tracing is enabled when both
    `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set.
-3. Start the OpenSandbox server using `sandbox/os-sandbox.toml` and run the app:
+3. Start the OpenSandbox server with the appropriate local configuration and run the app:
 
    ```bash
    streamlit run app.py

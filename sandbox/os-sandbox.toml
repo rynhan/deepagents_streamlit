@@ -12,28 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Example Docker Runtime Configuration for OpenSandbox Server
+# Coolify Docker Runtime Configuration for OpenSandbox Server
 #
 # Full configuration reference: https://github.com/opensandbox-group/OpenSandbox/blob/main/server/configuration.md
 
 [server]
-host = "127.0.0.1"
-port = 8080
+host = "0.0.0.0"
+port = 8090
 max_sandbox_timeout_seconds = 86400
 
-# Optional: Uncomment to enable API key authentication
-# api_key = "your-secret-api-key"
-# If api_key stays empty, startup requires explicit acknowledgment:
-# - Interactive TTY: type YES when prompted
-# - Non-interactive: set OPENSANDBOX_INSECURE_SERVER=YES
-
 [proxy]
-# When True (default), the sandbox reverse-proxy targets the sandbox's
-# internal Docker bridge container IP. Set to False to target the
-# server-local host-mapped port instead. Use False when the server process
-# cannot route to bridge container IPs, e.g. a launchd/systemd user session
-# on macOS where such traffic is blocked.
-resolve_internal = true
+# Sandboxes use Docker's default bridge while this server runs in Compose.
+# Route through the host-published sandbox ports rather than trying to reach
+# the sandbox bridge IP directly from the Compose network.
+resolve_internal = false
 
 [log]
 level = "INFO"
@@ -43,17 +35,17 @@ type = "docker"
 execd_image = "opensandbox/execd:v1.1.0"
 
 [storage]
-# Allowlist of host path prefixes permitted for bind mounts.
-# If empty, all host paths are allowed (not recommended for production).
-# Example: allowed_host_paths = ["/data/opensandbox", "/tmp/sandbox"]
-allowed_host_paths = []
+# Keep host bind mounts constrained. This application does not request host
+# mounts. If enabling them later, create this dedicated, empty directory on
+# the Docker host and store no sensitive files beneath it.
+allowed_host_paths = ["/opt/opensandbox/allowed-host-mounts"]
 
 # Default storage size for auto-created Kubernetes PVCs (when caller omits size).
 volume_default_size = "1Gi"
 
 [store]
 type = "sqlite"
-path = "~/.opensandbox/opensandbox.db"
+path = "/var/lib/opensandbox/opensandbox.db"
 # For an external PostgreSQL store, set type = "postgresql" and configure:
 # [store.postgresql]
 # min_pool_size = 1
@@ -78,7 +70,8 @@ port_range_max = 60000
 # The host address sandbox ports are published on (0.0.0.0 = every interface). Set an IP to keep
 # execd and the sandbox ports off public interfaces: 127.0.0.1 when the server runs on the host,
 # or the Docker bridge gateway (e.g. 172.17.0.1) when the server runs in a container.
-# publish_host = "127.0.0.1"
+host_ip = "host.docker.internal"
+publish_host = "172.17.0.1"
 # Drop dangerous capabilities and block privilege escalation
 drop_capabilities = ["AUDIT_WRITE", "MKNOD", "NET_ADMIN", "NET_RAW", "SYS_ADMIN", "SYS_MODULE", "SYS_PTRACE", "SYS_TIME", "SYS_TTY_CONFIG"]
 no_new_privileges = true
