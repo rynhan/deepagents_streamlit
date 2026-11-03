@@ -1,0 +1,1 @@
+"""Streamlit PowerPoint generation application."""

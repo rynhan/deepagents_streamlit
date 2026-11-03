@@ -10,6 +10,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py prompts.py ./
+COPY pptx_studio/ ./pptx_studio/
 
 EXPOSE 8501
 

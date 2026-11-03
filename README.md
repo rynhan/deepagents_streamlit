@@ -43,29 +43,69 @@ host checkout. Verify sandbox creation and agent file operations before opening 
 
 ## Local setup
 
-1. Build the sandbox image from this project's copied sandbox directory, or use an image that
-   already contains the same skills:
+1. From the project root, build the sandbox image:
 
    ```bash
-   cd sandbox
-   docker build -t pptx-sandbox:1 .
+   docker build -t pptx-sandbox:1 -f sandbox/Dockerfile sandbox
    ```
 
-2. Install the Python requirements in a virtual environment, then configure
-   `OPENAI_API_KEY` in `.env.local` (or in the process environment). `OPENAI_BASE_URL` and
-   `OPENAI_MODEL` can override the notebook defaults. Langfuse tracing is enabled when both
-   `LANGFUSE_SECRET_KEY` and `LANGFUSE_PUBLIC_KEY` are set.
-3. Start the OpenSandbox server with the appropriate local configuration and run the app:
+2. Install the Python requirements and create `.env.local`:
 
    ```bash
-   streamlit run app.py
+   python3 -m venv .venv
+   .venv/bin/pip install -r requirements.txt
+   cp .env.example .env.local
    ```
 
-The form accepts instructions, slide count, and one of the template skills under
-`sandbox/skills/template-*`. The selected skill is pinned for the agent. Progress updates
-are displayed during the run, and generated `.pptx` files are previewed in a wide, landscape
-viewer using PptxViewJS. Each generated file can be downloaded from the app. The
-viewer supports slide navigation but not editing. It loads PptxViewJS and its rendering
-dependencies from jsDelivr, so the user's browser needs network access to that CDN. The sandbox
-stays alive (up to the configured 24-hour sandbox maximum) until the user selects
-**Destroy sandbox and start over**.
+   Set `OPENAI_API_KEY` and a random `OPEN_SANDBOX_API_KEY` in `.env.local`. Set
+   `OPENAI_BASE_URL` if using a non-default OpenAI-compatible endpoint. Set
+   `OPEN_SANDBOX_DOMAIN=127.0.0.1:8090` for the host-run server below.
+
+3. Start the OpenSandbox server in one terminal. Run from the project root:
+
+   ```bash
+   set -a
+   . ./.env.local
+   set +a
+   OPENSANDBOX_SERVER_API_KEY="$OPEN_SANDBOX_API_KEY" \
+     uvx opensandbox-server --config ./sandbox/os-sandbox.toml
+   ```
+
+4. In a second terminal, from the project root, start Streamlit:
+
+   ```bash
+   cd /path/to/deepagents_streamlit
+   set -a
+   . ./.env.local
+   set +a
+   .venv/bin/streamlit run app.py
+   ```
+
+   Open the local URL shown by Streamlit. The OpenSandbox API key must match the server key.
+
+Alternatively, run all containers locally with `docker compose up --build`; the Compose setup
+builds the UI, server, and sandbox images and is closest to the Coolify deployment.
+
+## Code layout
+
+```text
+app.py                         # Small Streamlit entry point
+prompts.py                     # System and user prompt construction
+pptx_studio/
+  config.py                    # Environment loading and model/template options
+  generation.py                # OpenSandbox lifecycle and agent execution
+  models.py                    # Chat model and optional Langfuse callback factories
+  ui.py                        # Streamlit form, session state, and comparison results
+  components/pptx_preview.py   # Browser-side PowerPoint preview
+```
+
+The UI owns Streamlit state and rendering; `generation.py` handles sandbox and agent work
+without importing Streamlit. This keeps UI changes separate from generation behavior.
+
+The form accepts instructions, slide count, one of the template skills under
+`sandbox/skills/template-*`, and one to three models. Selected models generate concurrently in
+separate sandboxes, which increases API usage and host CPU/memory/network demand. The app shows
+a summary table, expandable per-model logs with expandable steps, and side-by-side previews with
+download buttons. Each generated `.pptx` can be downloaded from the app. The viewer supports
+slide navigation but not editing, and loads PptxViewJS from jsDelivr, so the browser needs CDN
+access. Each temporary sandbox is destroyed after its model run completes.
