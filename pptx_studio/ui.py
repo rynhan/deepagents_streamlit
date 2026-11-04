@@ -182,8 +182,8 @@ def main() -> None:
             template = st.selectbox("Design template", TEMPLATES, index=1)
         model_names = st.multiselect(
             "Models to compare (choose 1–3)",
-            MODELS,
-            default=[MODELS[0]],
+            [model["model_id"] for model in MODELS],
+            default=[MODELS[0]["model_id"]],
             max_selections=3,
             help="The same presentation request will be generated once by each selected model.",
         )
