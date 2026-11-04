@@ -9,9 +9,11 @@ all five presentation template skills.
 This repo includes a Streamlit `Dockerfile` and a Compose deployment for the UI plus the
 OpenSandbox Docker runtime. In Coolify, create a Docker Compose resource from this directory
 (or point the resource at `streamlit_app/docker-compose.yml`). Configure the required secrets
-in Coolify's environment settings, including `OPENAI_API_KEY` and a strong, random
-`OPEN_SANDBOX_API_KEY`. The API key is applied to both services; do not publish the
-OpenSandbox server port publicly.
+in Coolify's environment settings, including `OPENAI_API_KEY`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, and a strong, random `OPEN_SANDBOX_API_KEY`. Supabase credentials
+are used only by the Streamlit server; never expose the service-role key in browser code. Create
+the `files` Storage bucket in Supabase before deploying. The API key is applied to both services;
+do not publish the OpenSandbox server port publicly.
 
 Expose the `streamlit` service on port `8501` through Coolify's proxy and enable HTTPS. The
 OpenSandbox service uses the host Docker socket and creates sibling sandbox containers; this is
@@ -57,7 +59,9 @@ host checkout. Verify sandbox creation and agent file operations before opening 
    cp .env.example .env.local
    ```
 
-   Set `OPENAI_API_KEY` and a random `OPEN_SANDBOX_API_KEY` in `.env.local`. Set
+   Set `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a random
+   `OPEN_SANDBOX_API_KEY` in `.env.local`. Create the `files` bucket in Supabase. The service-role
+   key grants broad access, so keep it server-side and do not commit it. Set
    `OPENAI_BASE_URL` if using a non-default OpenAI-compatible endpoint. Set
    `OPEN_SANDBOX_DOMAIN=127.0.0.1:8090` for the host-run server below.
 
@@ -106,6 +110,10 @@ The form accepts instructions, slide count, one of the template skills under
 `sandbox/skills/template-*`, and one to three models. Selected models generate concurrently in
 separate sandboxes, which increases API usage and host CPU/memory/network demand. The app shows
 a summary table, expandable per-model logs with expandable steps, and side-by-side previews with
-download buttons. Each generated `.pptx` can be downloaded from the app. The viewer supports
+download buttons. Each generated `.pptx` is uploaded immediately after retrieval to the private
+Supabase Storage bucket named `files` and can also be downloaded from the app. Objects are stored
+under `presentations/YYYY/MM/DD/<run-id>/<model>/<filename>` to avoid collisions. The result
+table reports upload counts and any upload failures; a failed upload does not discard the deck
+from the current session. The bucket must already exist. The viewer supports
 slide navigation but not editing, and loads PptxViewJS from jsDelivr, so the browser needs CDN
 access. Each temporary sandbox is destroyed after its model run completes.

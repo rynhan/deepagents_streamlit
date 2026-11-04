@@ -12,7 +12,8 @@ import streamlit as st
 
 from pptx_studio.components.pptx_preview import pptx_preview
 from pptx_studio.config import MODELS, TEMPLATES
-from pptx_studio.generation import ModelRunResult, generate_presentations
+from pptx_studio.generation import ModelRunResult, PresentationResult, generate_presentations
+from pptx_studio.storage import storage_is_configured
 
 
 def _render_step_content(state_update: Any) -> None:
@@ -94,7 +95,9 @@ def _render_comparison(model_runs: list[ModelRunResult]) -> None:
             "Model": run.model_name,
             "Status": "Failed" if run.error else ("Completed" if run.presentations else "No PPTX found"),
             "Presentations": len(run.presentations),
+            "Uploaded": sum(presentation.storage_path is not None for presentation in run.presentations),
             "Error": run.error or "",
+            "Upload error": run.upload_error or "",
         }
         for run in model_runs
     ]
@@ -113,7 +116,7 @@ def _render_comparison(model_runs: list[ModelRunResult]) -> None:
                     with st.expander(f"Step {step_number} · {node}", expanded=False):
                         _render_step_content(state_update)
 
-    presentations = [
+    presentations: list[PresentationResult] = [
         presentation
         for run in model_runs
         for presentation in run.presentations
@@ -124,7 +127,10 @@ def _render_comparison(model_runs: list[ModelRunResult]) -> None:
     st.subheader("PowerPoint comparison")
     st.caption("Download and inspect each generated deck side by side.")
     compare_columns = st.columns(min(len(presentations), 3))
-    for index, (model_name, filename, pptx_content) in enumerate(presentations):
+    for index, presentation in enumerate(presentations):
+        model_name = presentation.model_name
+        filename = presentation.filename
+        pptx_content = presentation.content
         column = compare_columns[index % len(compare_columns)]
         presentation_id = hashlib.sha256(pptx_content).hexdigest()[:12]
         with column:
@@ -139,6 +145,10 @@ def _render_comparison(model_runs: list[ModelRunResult]) -> None:
                 key=f"pptx-download-{index}-{presentation_id}",
                 width="stretch",
             )
+            if presentation.storage_path:
+                st.caption(f"Saved to `files/{presentation.storage_path}`")
+            else:
+                st.warning("This deck was not uploaded to Supabase Storage.")
             pptx_preview(
                 pptx_content,
                 key=f"pptx-preview-{model_name}-{presentation_id}",
@@ -192,6 +202,12 @@ def main() -> None:
             return
         if not os.getenv("OPENAI_API_KEY"):
             st.error("Set `OPENAI_API_KEY` in `.env.local` (or the process environment) before generating.")
+            return
+        if not storage_is_configured():
+            st.error(
+                "Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` "
+                "(or the process environment) before generating."
+            )
             return
 
         st.session_state.generated_presentations = []

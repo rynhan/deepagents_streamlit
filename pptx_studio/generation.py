@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from queue import Empty, SimpleQueue
 from typing import Any, Callable
+from uuid import uuid4
 
 from deepagents import create_deep_agent
 from langchain_opensandbox import OpenSandboxBackend
@@ -18,10 +19,20 @@ from opensandbox.config import ConnectionConfigSync
 from prompts import SYSTEM_PROMPT, build_human_prompt
 from pptx_studio.config import REMOTE_SKILLS, SANDBOX_IMAGE
 from pptx_studio.models import langfuse_callbacks, make_model
+from pptx_studio.storage import upload_presentation
 
-PresentationResult = tuple[str, str, bytes]
 StepEvent = tuple[int, str, Any]
 ProgressCallback = Callable[[str, int, str, Any], None]
+
+
+@dataclass
+class PresentationResult:
+    """A generated deck and its Supabase Storage location, if uploaded."""
+
+    model_name: str
+    filename: str
+    content: bytes
+    storage_path: str | None = None
 
 
 @dataclass
@@ -32,6 +43,7 @@ class ModelRunResult:
     presentations: list[PresentationResult] = field(default_factory=list)
     steps: list[StepEvent] = field(default_factory=list)
     error: str | None = None
+    upload_error: str | None = None
 
 
 def sandbox_connection_config() -> ConnectionConfigSync | None:
@@ -62,6 +74,7 @@ def _generate_for_model(
     slides_count: int,
     template: str,
     model_name: str,
+    run_id: str,
     on_progress: ProgressCallback,
 ) -> ModelRunResult:
     """Run one model in its own sandbox to isolate concurrent filesystem work."""
@@ -103,11 +116,30 @@ def _generate_for_model(
             line.strip() for line in output.splitlines() if line.strip().endswith(".pptx")
         ]
         presentations: list[PresentationResult] = []
+        upload_errors: list[str] = []
+        date_prefix = datetime.now(timezone.utc).strftime("%Y/%m/%d")
+        safe_model = model_name.replace("/", "-")
         for result, remote_path in zip(backend.download_files(remote_paths), remote_paths):
             content = getattr(result, "content", None)
             if content:
-                presentations.append((model_name, Path(remote_path).name, content))
-        return ModelRunResult(model_name, presentations, steps)
+                filename = Path(remote_path).name
+                storage_path = None
+                try:
+                    storage_path = upload_presentation(
+                        content,
+                        f"presentations/{date_prefix}/{run_id}/{safe_model}/{filename}",
+                    )
+                except Exception as exc:
+                    upload_errors.append(f"{filename}: {exc}")
+                presentations.append(
+                    PresentationResult(model_name, filename, content, storage_path)
+                )
+        return ModelRunResult(
+            model_name,
+            presentations,
+            steps,
+            upload_error="; ".join(upload_errors) or None,
+        )
     except Exception as exc:
         return ModelRunResult(model_name, steps=steps, error=str(exc))
     finally:
@@ -131,6 +163,7 @@ def generate_presentations(
     if not model_names:
         return []
 
+    run_id = uuid4().hex
     progress_events: SimpleQueue[tuple[str, int, str, Any]] = SimpleQueue()
 
     def report_progress(
@@ -147,6 +180,7 @@ def generate_presentations(
                 slides_count,
                 template,
                 model_name,
+                run_id,
                 report_progress,
             ): model_name
             for model_name in model_names
